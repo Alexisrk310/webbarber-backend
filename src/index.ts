@@ -1,0 +1,37 @@
+import express from 'express';
+import passport from 'passport';
+import session from 'express-session';
+import authRoutes from './routes/authRoutes';
+import './config/passportConfig'; // Importamos la configuración de Passport
+import errorHandler from './middleware/errorHandler'; // Importamos el middleware de error
+
+const app = express();
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Sesión
+app.use(
+	session({
+		secret: process.env.JWT_SECRET!,
+		resave: false,
+		saveUninitialized: false,
+	})
+);
+
+// Inicialización de Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Rutas
+app.use('/auth', authRoutes);
+
+// Manejo de errores
+app.use(errorHandler);
+
+// Puerto de escucha
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+	console.log(`Servidor corriendo en http://localhost:${PORT}`);
+});
