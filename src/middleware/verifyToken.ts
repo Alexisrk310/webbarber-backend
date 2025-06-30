@@ -18,7 +18,7 @@ const verifyToken = (req: Request, res: Response, next: NextFunction) => {
 		}
 
 		// Si el token es válido, agregamos el user al request
-		req.user = decoded;
+		req.user = decoded as { id: string; role: string }; // Asegúrate de que el tipo coincida con tu definición de usuario
 		next();
 	});
 };

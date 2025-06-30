@@ -8,7 +8,7 @@ export const registerUser = async (
 	res: Response
 ): Promise<void> => {
 	try {
-		const { name, email, password, googleId } = req.body;
+		const { name, email, password, googleId, id, gender, role } = req.body;
 
 		// Verificar si el usuario ya existe
 		const existingUser = await prisma.user.findUnique({
@@ -26,17 +26,25 @@ export const registerUser = async (
 		// Crear un nuevo usuario con la contraseña encriptada
 		const user = await prisma.user.create({
 			data: {
+				id,
 				name,
 				email,
 				password: hashedPassword, // No guardes la contraseña en texto plano
 				googleId,
+				gender,
+				role,
 			},
 		});
 
 		// Enviar la respuesta con el nuevo usuario, pero sin la contraseña
 		res.status(201).json({
 			message: 'Usuario creado exitosamente',
-			user: { id: user.id, name: user.name, email: user.email }, // Nunca devolver la contraseña
+			user: {
+				id: user.id,
+				name: user.name,
+				email: user.email,
+				role: user.role === 'admin' ? 'admin' : 'user',
+			},
 		});
 	} catch (error) {
 		console.error(error);
@@ -78,14 +86,24 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 		}
 
 		// 3. Generar el JWT
-		const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
-			expiresIn: '1h',
-		});
+		const token = jwt.sign(
+			{ userId: user.id, role: user.role },
+			process.env.JWT_SECRET!,
+			{
+				expiresIn: '1h',
+			}
+		);
 
 		// 4. Responder con el token y los datos del usuario (sin la contraseña)
 		res.json({
 			message: 'Inicio de sesión exitoso',
-			user: { id: user.id, name: user.name, email: user.email },
+			user: {
+				id: user.id,
+				name: user.name,
+				email: user.email,
+				gender: user.gender,
+				role: user.role,
+			},
 			token,
 		});
 	} catch (error) {

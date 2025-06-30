@@ -7,17 +7,21 @@ CREATE TABLE "User" (
     "googleId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "gender" TEXT NOT NULL,
+    "role" TEXT NOT NULL DEFAULT 'user',
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Appointment" (
-    "id" TEXT NOT NULL,
-    "date" TIMESTAMP(3) NOT NULL,
-    "status" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "userId" TEXT NOT NULL,
+    "dateTime" TIMESTAMP(3) NOT NULL,
+    "status" TEXT NOT NULL,
+    "gender" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Appointment_pkey" PRIMARY KEY ("id")
 );

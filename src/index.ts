@@ -2,6 +2,7 @@ import express from 'express';
 import passport from 'passport';
 import session from 'express-session';
 import authRoutes from './routes/authRoutes';
+import appointmentRoutes from './routes/appointmentRoutes';
 import './config/passportConfig'; // Importamos la configuración de Passport
 import errorHandler from './middleware/errorHandler'; // Importamos el middleware de error
 
@@ -26,7 +27,7 @@ app.use(passport.session());
 
 // Rutas
 app.use('/auth', authRoutes);
-
+app.use('/api', appointmentRoutes);
 // Manejo de errores
 app.use(errorHandler);
 
