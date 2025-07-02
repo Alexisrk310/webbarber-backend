@@ -22,12 +22,13 @@ model User {
 
 model Appointment {
   id          Int      @id @default(autoincrement())
-  userId      String   // Asegúrate de que el tipo de userId sea String si tu modelo de User usa un String como id
+  name        String   // <- Este campo es obligatorio aquí
+  userId      String
   dateTime    DateTime
-  status      String   // 'pendiente', 'confirmada', etc.
-  gender      String   // 'Mujer', 'Hombre', 'Otro', etc.
+  status      String
+  gender      String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
+  service     String @default("Corte de cabello")
   user        User     @relation(fields: [userId], references: [id])
 }

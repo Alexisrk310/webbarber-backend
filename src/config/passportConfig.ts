@@ -40,7 +40,7 @@ passport.deserializeUser((id: string, done) => {
 	// Aquí deberías buscar al usuario en la base de datos usando el `id` que se pasa
 	prisma.user
 		.findUnique({ where: { id } }) // Encuentra al usuario en la base de datos
-		.then((user) => {
+		.then((user: any) => {
 			// Si el usuario es encontrado, lo pasamos a done
 			if (user) {
 				const expressUser = {
@@ -55,7 +55,7 @@ passport.deserializeUser((id: string, done) => {
 				done(null, false); // Si no se encuentra el usuario, devolvemos 'false'
 			}
 		})
-		.catch((error) => {
+		.catch((error: any) => {
 			done(error, false); // Manejo de errores
 		});
 });

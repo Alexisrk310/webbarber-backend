@@ -16,12 +16,14 @@ CREATE TABLE "User" (
 -- CreateTable
 CREATE TABLE "Appointment" (
     "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "dateTime" TIMESTAMP(3) NOT NULL,
     "status" TEXT NOT NULL,
     "gender" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "service" TEXT NOT NULL DEFAULT 'Corte de cabello',
 
     CONSTRAINT "Appointment_pkey" PRIMARY KEY ("id")
 );
