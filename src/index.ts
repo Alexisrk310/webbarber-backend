@@ -37,7 +37,10 @@ app.use('/api', appointmentRoutes);
 app.use(errorHandler);
 
 // Puerto de escucha
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-	console.log(`Servidor corriendo en http://localhost:${PORT}`);
-});
+// const PORT = process.env.PORT || 4000;
+// app.listen(PORT, () => {
+// 	console.log(`Servidor corriendo en http://localhost:${PORT}`);
+// });
+
+// ✅ Exportar app para que Vercel lo use como serverless function
+export default app;
