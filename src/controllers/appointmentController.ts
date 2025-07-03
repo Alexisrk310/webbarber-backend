@@ -60,7 +60,7 @@ export const createAppointment = async (
 		}
 
 		const finalName = name?.trim() || user.name;
-		const appointmentDate = parse(dateTime, 'dd/MM/yyyy HH:mm', new Date());
+		const appointmentDate = new Date(dateTime);
 
 		if (!isValid(appointmentDate)) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
@@ -153,7 +153,7 @@ export const updateOwnAppointment = async (
 		}
 
 		const finalName = name?.trim() || appointment.name;
-		const appointmentDate = parse(dateTime, 'dd/MM/yyyy HH:mm', new Date());
+		const appointmentDate = new Date(dateTime);
 
 		if (!isValid(appointmentDate)) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
@@ -303,7 +303,7 @@ export const adminUpdateAppointment = async (
 			return;
 		}
 
-		const appointmentDate = parse(dateTime, 'dd/MM/yyyy HH:mm', new Date());
+		const appointmentDate = new Date(dateTime);
 
 		if (!isValid(appointmentDate)) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
