@@ -2,27 +2,23 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { parse, isValid, getHours } from 'date-fns';
 import { ALLOWED_SERVICES } from '../constants/services';
+
 // Ruta para ver todas las citas de un usuario
 export const getUserAppointments = async (
 	req: Request,
 	res: Response
 ): Promise<void> => {
 	try {
-		const userId = req.user?.id; // Obtener el id del usuario de la solicitud
+		const userId = req.user?.id;
 
 		if (!userId) {
 			res.status(400).json({ message: 'Usuario no autenticado' });
 			return;
 		}
 
-		// Buscar todas las citas del usuario
 		const appointments = await prisma.appointment.findMany({
-			where: {
-				userId: userId,
-			},
-			orderBy: {
-				dateTime: 'asc', // Ordenar por hora de la cita
-			},
+			where: { userId },
+			orderBy: { dateTime: 'asc' },
 		});
 
 		res.status(200).json({ appointments });
@@ -34,6 +30,7 @@ export const getUserAppointments = async (
 	}
 };
 
+// Crear cita
 export const createAppointment = async (
 	req: Request,
 	res: Response
@@ -47,7 +44,6 @@ export const createAppointment = async (
 			return;
 		}
 
-		// Validar servicio
 		if (!ALLOWED_SERVICES.includes(service)) {
 			res.status(400).json({ message: 'Servicio no permitido' });
 			return;
@@ -74,6 +70,18 @@ export const createAppointment = async (
 		const startHour = getHours(appointmentDate);
 		if (startHour < 8 || startHour >= 17) {
 			res.status(400).json({ message: 'La cita debe estar entre 8am y 5pm' });
+			return;
+		}
+
+		// Verificar que no exista cita a esa misma hora
+		const existingAppointment = await prisma.appointment.findFirst({
+			where: { dateTime: appointmentDate },
+		});
+
+		if (existingAppointment) {
+			res.status(400).json({
+				message: 'Ya existe una cita agendada para esa fecha y hora',
+			});
 			return;
 		}
 
@@ -106,6 +114,7 @@ export const createAppointment = async (
 	}
 };
 
+// Actualizar cita (usuario dueño)
 export const updateOwnAppointment = async (
 	req: Request,
 	res: Response
@@ -159,6 +168,21 @@ export const updateOwnAppointment = async (
 			return;
 		}
 
+		// Verificar si ya hay otra cita en esa misma fecha y hora
+		const conflictingAppointment = await prisma.appointment.findFirst({
+			where: {
+				dateTime: appointmentDate,
+				id: { not: appointmentId },
+			},
+		});
+
+		if (conflictingAppointment) {
+			res.status(400).json({
+				message: 'Ya existe otra cita agendada para esa fecha y hora',
+			});
+			return;
+		}
+
 		const updatedAppointment = await prisma.appointment.update({
 			where: { id: appointmentId },
 			data: {
@@ -179,21 +203,20 @@ export const updateOwnAppointment = async (
 	}
 };
 
-// El usuario autenticado puede eliminar solo sus propias citas
+// Eliminar cita del propio usuario
 export const deleteOwnAppointment = async (
 	req: Request,
 	res: Response
 ): Promise<void> => {
 	try {
 		const userId = req.user?.id;
-		const appointmentId = Number(req.params.id); // desde la URL: /appointments/:id
+		const appointmentId = Number(req.params.id);
 
 		if (!userId || isNaN(appointmentId)) {
 			res.status(400).json({ message: 'ID inválido' });
 			return;
 		}
 
-		// Verificar si la cita pertenece al usuario
 		const appointment = await prisma.appointment.findUnique({
 			where: { id: appointmentId },
 		});
@@ -205,7 +228,6 @@ export const deleteOwnAppointment = async (
 			return;
 		}
 
-		// Eliminar la cita
 		await prisma.appointment.delete({
 			where: { id: appointmentId },
 		});
@@ -217,15 +239,14 @@ export const deleteOwnAppointment = async (
 	}
 };
 
-// Ruta para ver todas las citas de todos los usuarios (solo admin)
+// Ver todas las citas (admin)
 export const getAllAppointments = async (
 	req: Request,
 	res: Response
 ): Promise<void> => {
 	try {
-		const userRole = req.user?.role; // Obtener el rol del usuario desde el token
+		const userRole = req.user?.role;
 
-		// Solo permitir a los usuarios con rol de 'admin' acceder
 		if (userRole !== 'admin') {
 			res
 				.status(403)
@@ -234,9 +255,7 @@ export const getAllAppointments = async (
 		}
 
 		const appointments = await prisma.appointment.findMany({
-			orderBy: {
-				dateTime: 'asc', // Ordenar por hora de la cita
-			},
+			orderBy: { dateTime: 'asc' },
 			include: {
 				user: {
 					select: {
@@ -257,6 +276,7 @@ export const getAllAppointments = async (
 	}
 };
 
+// Actualizar cita (admin)
 export const adminUpdateAppointment = async (
 	req: Request,
 	res: Response
@@ -284,6 +304,7 @@ export const adminUpdateAppointment = async (
 		}
 
 		const appointmentDate = parse(dateTime, 'dd/MM/yyyy HH:mm', new Date());
+
 		if (!isValid(appointmentDate)) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
 			return;
@@ -294,6 +315,20 @@ export const adminUpdateAppointment = async (
 			res
 				.status(400)
 				.json({ message: 'La cita debe estar entre las 8am y las 5pm' });
+			return;
+		}
+
+		const conflictingAppointment = await prisma.appointment.findFirst({
+			where: {
+				dateTime: appointmentDate,
+				id: { not: appointmentId },
+			},
+		});
+
+		if (conflictingAppointment) {
+			res.status(400).json({
+				message: 'Ya existe otra cita agendada para esa fecha y hora',
+			});
 			return;
 		}
 
@@ -318,7 +353,7 @@ export const adminUpdateAppointment = async (
 	}
 };
 
-// Solo los administradores pueden eliminar cualquier cita
+// Eliminar cita (admin)
 export const adminDeleteAppointment = async (
 	req: Request,
 	res: Response
@@ -337,7 +372,6 @@ export const adminDeleteAppointment = async (
 			return;
 		}
 
-		// Verificar si la cita existe
 		const appointment = await prisma.appointment.findUnique({
 			where: { id: appointmentId },
 		});
@@ -347,7 +381,6 @@ export const adminDeleteAppointment = async (
 			return;
 		}
 
-		// Eliminar la cita
 		await prisma.appointment.delete({
 			where: { id: appointmentId },
 		});
