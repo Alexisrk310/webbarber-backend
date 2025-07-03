@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs'; // Para comparar contraseñas encriptadas
 import jwt from 'jsonwebtoken'; // Para generar el JWT
 import prisma from '../config/prisma';
+import { OAuth2Client } from 'google-auth-library';
 
 export const registerUser = async (
 	req: Request,
@@ -109,5 +110,50 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: 'Error al iniciar sesión', error });
+	}
+};
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+export const googleLogin = async (req: Request, res: Response) => {
+	try {
+		const { token } = req.body;
+
+		// Verifica el token con Google
+		const ticket = await client.verifyIdToken({
+			idToken: token,
+			audience: process.env.GOOGLE_CLIENT_ID,
+		});
+		const payload = ticket.getPayload();
+
+		if (!payload || !payload.email) {
+			res.status(400).json({ msg: 'Token inválido o email no encontrado' });
+			return;
+		}
+
+		// Busca o crea usuario en la base de datos
+		let user = await prisma.user.findUnique({
+			where: { email: payload.email },
+		});
+
+		if (!user) {
+			user = await prisma.user.create({
+				data: {
+					email: payload.email,
+					name: payload.name || 'Usuario Google',
+					role: 'user',
+					googleId: payload.sub,
+					gender: 'no-definido', // ✅ aquí el valor por defecto
+				},
+			});
+		}
+
+		// Crea un JWT para ese usuario
+		const jwtToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET!, {
+			expiresIn: '1h',
+		});
+
+		res.json({ user, token: jwtToken });
+	} catch (err) {
+		console.error('Error al verificar token de Google:', err);
+		res.status(500).json({ msg: 'Error al iniciar sesión con Google' });
 	}
 };

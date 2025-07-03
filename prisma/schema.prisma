@@ -15,7 +15,7 @@ model User {
   googleId  String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  gender    String   // 'Mujer' o 'Hombre' para distinguir el género
+  gender    String?   // 'Mujer' o 'Hombre' para distinguir el género
   role      String   @default("user") // Puede ser 'user' o 'admin'
   appointments Appointment[]
 }
