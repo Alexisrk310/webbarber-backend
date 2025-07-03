@@ -1,6 +1,6 @@
 import express from 'express';
 import './cron/updateAppointments';
-import passport from 'passport';
+
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import pg from 'pg'; // ← importante
@@ -49,9 +49,7 @@ app.use(
 	})
 );
 
-// Inicialización de Passport
-app.use(passport.initialize());
-app.use(passport.session());
+
 
 // Rutas
 app.use('/auth', authRoutes);

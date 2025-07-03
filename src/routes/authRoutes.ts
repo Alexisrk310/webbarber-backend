@@ -1,6 +1,6 @@
 // src/routes/authRoutes.ts
 import express, { Request, Response } from 'express';
-import passport from 'passport';
+
 import jwt from 'jsonwebtoken';
 import { googleLogin, loginUser, registerUser } from '../controllers/authController';
 import { protect } from '../middleware/authMiddleware';
