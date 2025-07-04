@@ -7,6 +7,7 @@ import {
 	adminDeleteAppointment,
 	updateOwnAppointment,
 	adminUpdateAppointment,
+	getAllScheduledDates,
 } from '../controllers/appointmentController';
 import { protect, isAdmin } from '../middleware/authMiddleware';
 
@@ -17,6 +18,7 @@ router.get('/appointments', protect, getUserAppointments);
 
 // Ruta protegida para agregar una nueva cita
 router.post('/appointments', protect, createAppointment);
+router.get('/appointments/scheduled', protect, getAllScheduledDates);
 router.put('/my/:id', protect, updateOwnAppointment);
 
 router.delete('/my/:id', protect, deleteOwnAppointment); // El usuario elimina la suya

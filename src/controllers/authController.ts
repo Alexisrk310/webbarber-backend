@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'; // Para comparar contraseñas encriptadas
 import jwt from 'jsonwebtoken'; // Para generar el JWT
 import prisma from '../config/prisma';
 import { OAuth2Client } from 'google-auth-library';
-
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 export const registerUser = async (
 	req: Request,
 	res: Response
@@ -112,7 +112,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 		res.status(500).json({ message: 'Error al iniciar sesión', error });
 	}
 };
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
 export const googleLogin = async (req: Request, res: Response) => {
 	try {
 		const { token } = req.body;

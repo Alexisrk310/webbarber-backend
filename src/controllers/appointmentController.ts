@@ -239,6 +239,43 @@ export const deleteOwnAppointment = async (
 	}
 };
 
+export const getAllScheduledDates = async (
+	req: Request,
+	res: Response
+): Promise<void> => {
+	try {
+		const userId = req.user?.id;
+
+		if (!userId) {
+			res.status(401).json({ message: 'Usuario no autenticado' });
+			return;
+		}
+
+		const appointments = await prisma.appointment.findMany({
+			select: {
+				id: true,
+				dateTime: true,
+			},
+			orderBy: {
+				dateTime: 'asc',
+			},
+		});
+
+		const formatted = appointments.map((app) => ({
+			id: app.id,
+			date: app.dateTime.toISOString().split('T')[0], // formato YYYY-MM-DD
+			time: app.dateTime.toTimeString().split(' ')[0], // formato HH:MM:SS
+		}));
+
+		res.status(200).json({ scheduled: formatted });
+	} catch (error) {
+		console.error(error);
+		res
+			.status(500)
+			.json({ message: 'Error al obtener las fechas de citas', error });
+	}
+};
+
 // Ver todas las citas (admin)
 export const getAllAppointments = async (
 	req: Request,
