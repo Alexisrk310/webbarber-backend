@@ -1,6 +1,14 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import { parse, isValid, getHours } from 'date-fns';
+import {
+	parse,
+	isValid,
+	getHours,
+	startOfDay,
+	endOfDay,
+	startOfWeek,
+	endOfWeek,
+} from 'date-fns';
 import { ALLOWED_SERVICES } from '../constants/services';
 
 // Ruta para ver todas las citas de un usuario
@@ -239,43 +247,6 @@ export const deleteOwnAppointment = async (
 	}
 };
 
-export const getAllScheduledDates = async (
-	req: Request,
-	res: Response
-): Promise<void> => {
-	try {
-		const userId = req.user?.id;
-
-		if (!userId) {
-			res.status(401).json({ message: 'Usuario no autenticado' });
-			return;
-		}
-
-		const appointments = await prisma.appointment.findMany({
-			select: {
-				id: true,
-				dateTime: true,
-			},
-			orderBy: {
-				dateTime: 'asc',
-			},
-		});
-
-		const formatted = appointments.map((app) => ({
-			id: app.id,
-			date: app.dateTime.toISOString().split('T')[0], // formato YYYY-MM-DD
-			time: app.dateTime.toTimeString().split(' ')[0], // formato HH:MM:SS
-		}));
-
-		res.status(200).json({ scheduled: formatted });
-	} catch (error) {
-		console.error(error);
-		res
-			.status(500)
-			.json({ message: 'Error al obtener las fechas de citas', error });
-	}
-};
-
 // Ver todas las citas (admin)
 export const getAllAppointments = async (
 	req: Request,
@@ -387,6 +358,70 @@ export const adminUpdateAppointment = async (
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: 'Error al actualizar la cita', error });
+	}
+};
+
+export const getAppointmentStats = async (
+	req: Request,
+	res: Response
+): Promise<void> => {
+	try {
+		const userRole = req.user?.role;
+
+		if (userRole !== 'admin') {
+			res.status(403).json({ message: 'Acceso denegado: solo admins' });
+			return;
+		}
+
+		const today = new Date();
+		const startToday = startOfDay(today);
+		const endToday = endOfDay(today);
+
+		const startWeek = startOfWeek(today, { weekStartsOn: 1 }); // Lunes
+		const endWeek = endOfWeek(today, { weekStartsOn: 1 }); // Domingo
+
+		const [todayAppointments, weekAppointments, activeClients] =
+			await Promise.all([
+				prisma.appointment.count({
+					where: {
+						dateTime: {
+							gte: startToday,
+							lte: endToday,
+						},
+					},
+				}),
+				prisma.appointment.count({
+					where: {
+						dateTime: {
+							gte: startWeek,
+							lte: endWeek,
+						},
+					},
+				}),
+				prisma.appointment.findMany({
+					where: {
+						status: {
+							in: ['pendiente', 'confirmada'], // ajusta si usas otros estados
+						},
+					},
+					select: {
+						userId: true,
+					},
+					distinct: ['userId'],
+				}),
+			]);
+
+		res.status(200).json({
+			todayAppointments,
+			weekAppointments,
+			activeClientsCount: activeClients.length,
+		});
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({
+			message: 'Error al obtener estadísticas de las citas',
+			error,
+		});
 	}
 };
 
