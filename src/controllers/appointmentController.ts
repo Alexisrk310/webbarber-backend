@@ -10,6 +10,16 @@ import {
 	endOfWeek,
 } from 'date-fns';
 import { ALLOWED_SERVICES } from '../constants/services';
+import { utcToZonedTime } from 'date-fns-tz';
+
+const TIME_ZONE = 'America/Bogota';
+
+// ✅ Utilidad para validar si está dentro del horario laboral
+const isHourWithinWorkingHours = (date: Date) => {
+	const zoned = utcToZonedTime(date, TIME_ZONE);
+	const hour = getHours(zoned);
+	return hour >= 8 && hour < 17;
+};
 
 // Ruta para ver todas las citas de un usuario
 export const getUserAppointments = async (
@@ -18,17 +28,14 @@ export const getUserAppointments = async (
 ): Promise<void> => {
 	try {
 		const userId = req.user?.id;
-
 		if (!userId) {
 			res.status(400).json({ message: 'Usuario no autenticado' });
 			return;
 		}
-
 		const appointments = await prisma.appointment.findMany({
 			where: { userId },
 			orderBy: { dateTime: 'asc' },
 		});
-
 		res.status(200).json({ appointments });
 	} catch (error) {
 		console.error(error);
@@ -46,53 +53,43 @@ export const createAppointment = async (
 	try {
 		const { dateTime, gender, name, service } = req.body;
 		const userId = req.user?.id;
-
 		if (!dateTime || !gender || !userId || !service) {
 			res.status(400).json({ message: 'Datos incompletos para la cita' });
 			return;
 		}
-
 		if (!ALLOWED_SERVICES.includes(service)) {
 			res.status(400).json({ message: 'Servicio no permitido' });
 			return;
 		}
-
 		const user = await prisma.user.findUnique({
 			where: { id: userId },
 			select: { name: true },
 		});
-
 		if (!user) {
 			res.status(404).json({ message: 'Usuario no encontrado' });
 			return;
 		}
-
 		const finalName = name?.trim() || user.name;
 		const appointmentDate = new Date(dateTime);
-
 		if (!isValid(appointmentDate)) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
 			return;
 		}
-
-		const startHour = getHours(appointmentDate);
-		if (startHour < 8 || startHour >= 17) {
-			res.status(400).json({ message: 'La cita debe estar entre 8am y 5pm' });
-			return;
-		}
-
-		// Verificar que no exista cita a esa misma hora
-		const existingAppointment = await prisma.appointment.findFirst({
-			where: { dateTime: appointmentDate },
-		});
-
-		if (existingAppointment) {
+		if (!isHourWithinWorkingHours(appointmentDate)) {
 			res.status(400).json({
-				message: 'Ya existe una cita agendada para esa fecha y hora',
+				message: 'La cita debe estar entre 8am y 5pm (hora Colombia)',
 			});
 			return;
 		}
-
+		const existingAppointment = await prisma.appointment.findFirst({
+			where: { dateTime: appointmentDate },
+		});
+		if (existingAppointment) {
+			res
+				.status(400)
+				.json({ message: 'Ya existe una cita agendada para esa fecha y hora' });
+			return;
+		}
 		const newAppointment = await prisma.appointment.create({
 			data: {
 				userId,
@@ -102,16 +99,8 @@ export const createAppointment = async (
 				gender,
 				service,
 			},
-			include: {
-				user: {
-					select: {
-						name: true,
-						email: true,
-					},
-				},
-			},
+			include: { user: { select: { name: true, email: true } } },
 		});
-
 		res.status(201).json({
 			message: 'Cita agendada correctamente',
 			appointment: newAppointment,
@@ -131,76 +120,54 @@ export const updateOwnAppointment = async (
 		const userId = req.user?.id;
 		const appointmentId = Number(req.params.id);
 		const { dateTime, gender, name, service } = req.body;
-
 		if (!userId || isNaN(appointmentId)) {
 			res.status(400).json({ message: 'ID inválido' });
 			return;
 		}
-
 		if (!dateTime || !gender || !service) {
 			res
 				.status(400)
 				.json({ message: 'Datos incompletos para actualizar la cita' });
 			return;
 		}
-
 		if (!ALLOWED_SERVICES.includes(service)) {
 			res.status(400).json({ message: 'Servicio no permitido' });
 			return;
 		}
-
 		const appointment = await prisma.appointment.findUnique({
 			where: { id: appointmentId },
 		});
-
 		if (!appointment || appointment.userId !== userId) {
 			res
 				.status(403)
 				.json({ message: 'No tienes permisos para editar esta cita' });
 			return;
 		}
-
 		const finalName = name?.trim() || appointment.name;
 		const appointmentDate = new Date(dateTime);
-
 		if (!isValid(appointmentDate)) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
 			return;
 		}
-
-		const hour = getHours(appointmentDate);
-		if (hour < 8 || hour >= 17) {
-			res
-				.status(400)
-				.json({ message: 'La cita debe estar entre las 8am y las 5pm' });
+		if (!isHourWithinWorkingHours(appointmentDate)) {
+			res.status(400).json({
+				message: 'La cita debe estar entre 8am y 5pm (hora Colombia)',
+			});
 			return;
 		}
-
-		// Verificar si ya hay otra cita en esa misma fecha y hora
 		const conflictingAppointment = await prisma.appointment.findFirst({
-			where: {
-				dateTime: appointmentDate,
-				id: { not: appointmentId },
-			},
+			where: { dateTime: appointmentDate, id: { not: appointmentId } },
 		});
-
 		if (conflictingAppointment) {
 			res.status(400).json({
 				message: 'Ya existe otra cita agendada para esa fecha y hora',
 			});
 			return;
 		}
-
 		const updatedAppointment = await prisma.appointment.update({
 			where: { id: appointmentId },
-			data: {
-				dateTime: appointmentDate,
-				gender,
-				name: finalName,
-				service,
-			},
+			data: { dateTime: appointmentDate, gender, name: finalName, service },
 		});
-
 		res.status(200).json({
 			message: 'Cita actualizada correctamente',
 			appointment: updatedAppointment,
@@ -293,53 +260,40 @@ export const adminUpdateAppointment = async (
 		const userRole = req.user?.role;
 		const appointmentId = Number(req.params.id);
 		const { dateTime, gender, name, service, status } = req.body;
-
 		if (userRole !== 'admin') {
 			res.status(403).json({ message: 'Acceso denegado: solo admins' });
 			return;
 		}
-
 		if (!dateTime || !gender || !service || !status) {
 			res
 				.status(400)
 				.json({ message: 'Datos incompletos para actualizar la cita' });
 			return;
 		}
-
 		if (!ALLOWED_SERVICES.includes(service)) {
 			res.status(400).json({ message: 'Servicio no permitido' });
 			return;
 		}
-
 		const appointmentDate = new Date(dateTime);
-
 		if (!isValid(appointmentDate)) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
 			return;
 		}
-
-		const hour = getHours(appointmentDate);
-		if (hour < 8 || hour >= 17) {
+		if (!isHourWithinWorkingHours(appointmentDate)) {
 			res
 				.status(400)
 				.json({ message: 'La cita debe estar entre las 8am y las 5pm' });
 			return;
 		}
-
 		const conflictingAppointment = await prisma.appointment.findFirst({
-			where: {
-				dateTime: appointmentDate,
-				id: { not: appointmentId },
-			},
+			where: { dateTime: appointmentDate, id: { not: appointmentId } },
 		});
-
 		if (conflictingAppointment) {
 			res.status(400).json({
 				message: 'Ya existe otra cita agendada para esa fecha y hora',
 			});
 			return;
 		}
-
 		const updatedAppointment = await prisma.appointment.update({
 			where: { id: appointmentId },
 			data: {
@@ -350,7 +304,6 @@ export const adminUpdateAppointment = async (
 				status,
 			},
 		});
-
 		res.status(200).json({
 			message: 'Cita actualizada por el administrador',
 			appointment: updatedAppointment,
