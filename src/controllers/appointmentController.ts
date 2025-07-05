@@ -1,27 +1,23 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import {
-	parse,
-	isValid,
-	getHours,
-	startOfDay,
-	endOfDay,
-	startOfWeek,
-	endOfWeek,
-} from 'date-fns';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import isoWeek from 'dayjs/plugin/isoWeek';
 import { ALLOWED_SERVICES } from '../constants/services';
-import { utcToZonedTime } from 'date-fns-tz';
 
 const TIME_ZONE = 'America/Bogota';
 
-// ✅ Utilidad para validar si está dentro del horario laboral
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(isoWeek);
+
 const isHourWithinWorkingHours = (date: Date) => {
-	const zoned = utcToZonedTime(date, TIME_ZONE);
-	const hour = getHours(zoned);
+	const zoned = dayjs(date).tz(TIME_ZONE);
+	const hour = zoned.hour();
 	return hour >= 8 && hour < 17;
 };
 
-// Ruta para ver todas las citas de un usuario
 export const getUserAppointments = async (
 	req: Request,
 	res: Response
@@ -45,7 +41,6 @@ export const getUserAppointments = async (
 	}
 };
 
-// Crear cita
 export const createAppointment = async (
 	req: Request,
 	res: Response
@@ -70,8 +65,8 @@ export const createAppointment = async (
 			return;
 		}
 		const finalName = name?.trim() || user.name;
-		const appointmentDate = new Date(dateTime);
-		if (!isValid(appointmentDate)) {
+		const appointmentDate = dayjs(dateTime).toDate();
+		if (!dayjs(appointmentDate).isValid()) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
 			return;
 		}
@@ -111,7 +106,6 @@ export const createAppointment = async (
 	}
 };
 
-// Actualizar cita (usuario dueño)
 export const updateOwnAppointment = async (
 	req: Request,
 	res: Response
@@ -144,8 +138,8 @@ export const updateOwnAppointment = async (
 			return;
 		}
 		const finalName = name?.trim() || appointment.name;
-		const appointmentDate = new Date(dateTime);
-		if (!isValid(appointmentDate)) {
+		const appointmentDate = dayjs(dateTime).toDate();
+		if (!dayjs(appointmentDate).isValid()) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
 			return;
 		}
@@ -260,40 +254,51 @@ export const adminUpdateAppointment = async (
 		const userRole = req.user?.role;
 		const appointmentId = Number(req.params.id);
 		const { dateTime, gender, name, service, status } = req.body;
+
 		if (userRole !== 'admin') {
 			res.status(403).json({ message: 'Acceso denegado: solo admins' });
 			return;
 		}
+
 		if (!dateTime || !gender || !service || !status) {
 			res
 				.status(400)
 				.json({ message: 'Datos incompletos para actualizar la cita' });
 			return;
 		}
+
 		if (!ALLOWED_SERVICES.includes(service)) {
 			res.status(400).json({ message: 'Servicio no permitido' });
 			return;
 		}
-		const appointmentDate = new Date(dateTime);
-		if (!isValid(appointmentDate)) {
+
+		const appointmentDate = dayjs(dateTime).toDate();
+		if (!dayjs(appointmentDate).isValid()) {
 			res.status(400).json({ message: 'Formato de fecha no válido' });
 			return;
 		}
+
 		if (!isHourWithinWorkingHours(appointmentDate)) {
-			res
-				.status(400)
-				.json({ message: 'La cita debe estar entre las 8am y las 5pm' });
+			res.status(400).json({
+				message: 'La cita debe estar entre 8am y 5pm (hora Colombia)',
+			});
 			return;
 		}
+
 		const conflictingAppointment = await prisma.appointment.findFirst({
-			where: { dateTime: appointmentDate, id: { not: appointmentId } },
+			where: {
+				dateTime: appointmentDate,
+				id: { not: appointmentId },
+			},
 		});
+
 		if (conflictingAppointment) {
 			res.status(400).json({
 				message: 'Ya existe otra cita agendada para esa fecha y hora',
 			});
 			return;
 		}
+
 		const updatedAppointment = await prisma.appointment.update({
 			where: { id: appointmentId },
 			data: {
@@ -304,6 +309,7 @@ export const adminUpdateAppointment = async (
 				status,
 			},
 		});
+
 		res.status(200).json({
 			message: 'Cita actualizada por el administrador',
 			appointment: updatedAppointment,
@@ -320,18 +326,14 @@ export const getAppointmentStats = async (
 ): Promise<void> => {
 	try {
 		const userRole = req.user?.role;
-
 		if (userRole !== 'admin') {
 			res.status(403).json({ message: 'Acceso denegado: solo admins' });
 			return;
 		}
-
-		const today = new Date();
-		const startToday = startOfDay(today);
-		const endToday = endOfDay(today);
-
-		const startWeek = startOfWeek(today, { weekStartsOn: 1 }); // Lunes
-		const endWeek = endOfWeek(today, { weekStartsOn: 1 }); // Domingo
+		const startToday = dayjs().tz(TIME_ZONE).startOf('day').toDate();
+		const endToday = dayjs().tz(TIME_ZONE).endOf('day').toDate();
+		const startWeek = dayjs().tz(TIME_ZONE).startOf('isoWeek').toDate();
+		const endWeek = dayjs().tz(TIME_ZONE).endOf('isoWeek').toDate();
 
 		const [todayAppointments, weekAppointments, activeClients] =
 			await Promise.all([
@@ -354,7 +356,7 @@ export const getAppointmentStats = async (
 				prisma.appointment.findMany({
 					where: {
 						status: {
-							in: ['pendiente', 'confirmada'], // ajusta si usas otros estados
+							in: ['pendiente', 'confirmada'],
 						},
 					},
 					select: {

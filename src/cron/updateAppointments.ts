@@ -1,23 +1,28 @@
-// src/cron/updateAppointments.ts
 import cron from 'node-cron';
 import { PrismaClient } from '@prisma/client';
-import { isBefore, addHours } from 'date-fns';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 
 const prisma = new PrismaClient();
 
-// Ejecuta cada 5 minutos
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const TIME_ZONE = 'America/Bogota';
+
+// Ejecutar cada 5 minutos
 cron.schedule('*/5 * * * *', async () => {
 	try {
-		const now = new Date();
-		const twoHoursLater = addHours(now, 2);
+		const now = dayjs().tz(TIME_ZONE);
+		const twoHoursLater = now.add(2, 'hour');
 
-		// Encuentra las citas pendientes que ocurren en menos de 2 horas
 		const pendingAppointments = await prisma.appointment.findMany({
 			where: {
 				status: 'pendiente',
 				dateTime: {
-					lte: twoHoursLater,
-					gte: now,
+					lte: twoHoursLater.toDate(),
+					gte: now.toDate(),
 				},
 			},
 		});
@@ -30,7 +35,7 @@ cron.schedule('*/5 * * * *', async () => {
 		}
 
 		console.log(
-			`✔️ [CRON] Se actualizaron ${pendingAppointments.length} citas a 'activo'`
+			`✔️ [CRON] ${pendingAppointments.length} citas cambiadas a estado 'activo'`
 		);
 	} catch (error) {
 		console.error('❌ [CRON] Error al actualizar citas:', error);

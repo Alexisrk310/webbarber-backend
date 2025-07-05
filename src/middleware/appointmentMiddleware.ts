@@ -1,63 +1,59 @@
+// src/middleware/appointmentMiddleware.ts
 import { Request, Response, NextFunction } from 'express';
 import { appointmentConfig } from '../config/appointmentConfig';
-import { utcToZonedTime } from 'date-fns-tz';
-import { getHours, isValid } from 'date-fns';
 
-const timeZone = 'America/Bogota';
-
+// Función para verificar si es fin de semana
 const isWeekend = (date: Date): boolean => {
 	const day = date.getDay();
-	return day === 6 || day === 0;
+	return day === 6 || day === 0; // 6: Sábado, 0: Domingo
 };
 
+// Función para verificar si es un día festivo
 const isHoliday = (date: Date): boolean => {
-	const formattedDate = date.toISOString().split('T')[0];
+	const formattedDate = date.toISOString().split('T')[0]; // Formato 'YYYY-MM-DD'
 	return appointmentConfig.holidays.includes(formattedDate);
 };
 
+// Middleware para comprobar la disponibilidad de la cita
 export const checkAvailability = (
 	req: Request,
 	res: Response,
 	next: NextFunction
 ): void => {
-	const { dateTime } = req.body;
+	const { date, time } = req.body; // Fecha y hora solicitadas
 
-	if (!dateTime) {
-		res.status(400).json({ message: 'La fecha y hora son requeridas' });
-		return;
+	if (!date || !time) {
+		res.status(400).json({ message: 'Fecha y hora son requeridas' });
+		return; // Aquí se termina el flujo, no necesitamos llamar a next().
 	}
 
-	const utcDate = new Date(dateTime);
-	if (!isValid(utcDate)) {
-		res.status(400).json({ message: 'Formato de fecha no válido' });
-		return;
-	}
+	const requestedDate = new Date(date);
+	const requestedTime = parseInt(time);
 
-	const localDate = utcToZonedTime(utcDate, timeZone);
-	const localHour = getHours(localDate);
-
-	if (
-		localHour < appointmentConfig.workingHours.start ||
-		localHour >= appointmentConfig.workingHours.end
-	) {
-		res.status(400).json({
-			message:
-				'La hora solicitada no está dentro del horario laboral (8am a 5pm hora Colombia)',
-		});
-		return;
-	}
-
-	if (!appointmentConfig.weekendsEnabled && isWeekend(localDate)) {
+	// Verificar si la fecha está en fin de semana
+	if (appointmentConfig.weekendsEnabled === false && isWeekend(requestedDate)) {
 		res.status(400).json({ message: 'Los fines de semana están desactivados' });
 		return;
 	}
 
-	if (isHoliday(localDate)) {
+	// Verificar si la fecha es un día festivo
+	if (isHoliday(requestedDate)) {
 		res
 			.status(400)
 			.json({ message: 'No se pueden hacer citas en días festivos' });
 		return;
 	}
 
-	next();
+	// Verificar si la hora solicitada está dentro del horario de trabajo
+	if (
+		requestedTime < appointmentConfig.workingHours.start ||
+		requestedTime > appointmentConfig.workingHours.end
+	) {
+		res.status(400).json({
+			message: 'La hora solicitada no está dentro del horario de trabajo',
+		});
+		return;
+	}
+
+	next(); // Si todo está bien, continuamos con la solicitud
 };
