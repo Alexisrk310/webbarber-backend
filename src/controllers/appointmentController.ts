@@ -31,22 +31,24 @@ export const getUserAppointments = async (
 
 		const appointments = await prisma.appointment.findMany({
 			where: { userId },
-			orderBy: { dateTime: 'asc' }, // orden preliminar por fecha
+			orderBy: { dateTime: 'desc' }, // fechas más recientes primero
 		});
 
-		// Reordenar según estado y luego por fecha
+		// Ordenar por estado y luego por fecha (descendente)
 		const ordered = appointments.sort((a, b) => {
 			const statusOrder = (status: string) => {
 				if (status === 'pendiente') return 0;
-				if (status === 'activo') return 1;
-				if (status === 'completado') return 2;
-				return 3;
+				if (status === 'en_curso') return 1;
+				if (status === 'activo') return 2;
+				if (status === 'completado') return 3;
+				return 4;
 			};
 
 			const statusDiff = statusOrder(a.status) - statusOrder(b.status);
 			if (statusDiff !== 0) return statusDiff;
 
-			return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
+			// Ordenar por fecha descendente
+			return new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime();
 		});
 
 		res.status(200).json({ appointments: ordered });
@@ -241,7 +243,7 @@ export const getAllAppointments = async (
 		}
 
 		const appointments = await prisma.appointment.findMany({
-			orderBy: { dateTime: 'asc' },
+			orderBy: { dateTime: 'desc' }, // fecha más reciente primero
 			include: {
 				user: {
 					select: {
@@ -253,7 +255,24 @@ export const getAllAppointments = async (
 			},
 		});
 
-		res.status(200).json({ appointments });
+		// Reordenar por estado y fecha (fecha descendente)
+		const ordered = appointments.sort((a, b) => {
+			const statusOrder = (status: string) => {
+				if (status === 'pendiente') return 0;
+				if (status === 'en_curso') return 1;
+				if (status === 'activo') return 2;
+				if (status === 'completado') return 3;
+				return 4;
+			};
+
+			const statusDiff = statusOrder(a.status) - statusOrder(b.status);
+			if (statusDiff !== 0) return statusDiff;
+
+			// Fecha descendente (más reciente primero)
+			return new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime();
+		});
+
+		res.status(200).json({ appointments: ordered });
 	} catch (error) {
 		console.error(error);
 		res
@@ -378,7 +397,7 @@ export const getAppointmentStats = async (
 			prisma.appointment.findMany({
 				where: {
 					status: {
-						in: ['pendiente', 'confirmada'],
+						in: ['pendiente', 'en_curso', 'activo'],
 					},
 				},
 				select: {
@@ -394,24 +413,26 @@ export const getAppointmentStats = async (
 					},
 				},
 				orderBy: {
-					dateTime: 'asc', // orden inicial por fecha
+					dateTime: 'desc', // para que luego el sort no tenga que invertir
 				},
 			}),
 		]);
 
-		// Reordenar las citas del día por estado y luego por fecha
+		// Reordenar por estado y luego por fecha descendente
 		const orderedAppointments = todayAppointmentsList.sort((a, b) => {
 			const statusOrder = (status: string) => {
 				if (status === 'pendiente') return 0;
-				if (status === 'activo') return 1;
-				if (status === 'completado') return 2;
-				return 3;
+				if (status === 'en_curso') return 1;
+				if (status === 'activo') return 2;
+				if (status === 'completado') return 3;
+				return 4;
 			};
 
 			const statusDiff = statusOrder(a.status) - statusOrder(b.status);
 			if (statusDiff !== 0) return statusDiff;
 
-			return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
+			// Fecha descendente (más reciente primero)
+			return new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime();
 		});
 
 		res.status(200).json({
