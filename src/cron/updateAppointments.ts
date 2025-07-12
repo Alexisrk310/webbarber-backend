@@ -15,27 +15,45 @@ const TIME_ZONE = 'America/Bogota';
 cron.schedule('*/5 * * * *', async () => {
 	try {
 		const now = dayjs().tz(TIME_ZONE);
-		const twoHoursLater = now.add(2, 'hour');
 
-		const pendingAppointments = await prisma.appointment.findMany({
+		// 🔹 Citas que deben estar "activas" (ya están comenzando)
+		const appointmentsToActivate = await prisma.appointment.findMany({
 			where: {
 				status: 'pendiente',
 				dateTime: {
-					lte: twoHoursLater.toDate(),
-					gte: now.toDate(),
+					lte: now.toDate(), // ya inició
+					gte: now.subtract(5, 'minutes').toDate(), // comenzó en los últimos 5 minutos
 				},
 			},
 		});
 
-		for (const appointment of pendingAppointments) {
+		for (const appointment of appointmentsToActivate) {
 			await prisma.appointment.update({
 				where: { id: appointment.id },
 				data: { status: 'activo' },
 			});
 		}
 
+		// 🔸 Citas que deben ser "completadas" (ya pasaron hace más de 1h)
+		const appointmentsToComplete = await prisma.appointment.findMany({
+			where: {
+				status: 'activo',
+				dateTime: {
+					lte: now.subtract(1, 'hour').toDate(), // ya pasó hace 1 hora
+				},
+			},
+		});
+
+		for (const appointment of appointmentsToComplete) {
+			await prisma.appointment.update({
+				where: { id: appointment.id },
+				data: { status: 'completado' },
+			});
+		}
+
+		console.log(`✔️ [CRON] ${appointmentsToActivate.length} citas activadas.`);
 		console.log(
-			`✔️ [CRON] ${pendingAppointments.length} citas cambiadas a estado 'activo'`
+			`✔️ [CRON] ${appointmentsToComplete.length} citas completadas.`
 		);
 	} catch (error) {
 		console.error('❌ [CRON] Error al actualizar citas:', error);

@@ -28,11 +28,28 @@ export const getUserAppointments = async (
 			res.status(400).json({ message: 'Usuario no autenticado' });
 			return;
 		}
+
 		const appointments = await prisma.appointment.findMany({
 			where: { userId },
-			orderBy: { dateTime: 'asc' },
+			orderBy: { dateTime: 'asc' }, // orden preliminar por fecha
 		});
-		res.status(200).json({ appointments });
+
+		// Reordenar según estado y luego por fecha
+		const ordered = appointments.sort((a, b) => {
+			const statusOrder = (status: string) => {
+				if (status === 'pendiente') return 0;
+				if (status === 'activo') return 1;
+				if (status === 'completado') return 2;
+				return 3;
+			};
+
+			const statusDiff = statusOrder(a.status) - statusOrder(b.status);
+			if (statusDiff !== 0) return statusDiff;
+
+			return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
+		});
+
+		res.status(200).json({ appointments: ordered });
 	} catch (error) {
 		console.error(error);
 		res
@@ -330,46 +347,78 @@ export const getAppointmentStats = async (
 			res.status(403).json({ message: 'Acceso denegado: solo admins' });
 			return;
 		}
+
 		const startToday = dayjs().tz(TIME_ZONE).startOf('day').toDate();
 		const endToday = dayjs().tz(TIME_ZONE).endOf('day').toDate();
 		const startWeek = dayjs().tz(TIME_ZONE).startOf('isoWeek').toDate();
 		const endWeek = dayjs().tz(TIME_ZONE).endOf('isoWeek').toDate();
 
-		const [todayAppointments, weekAppointments, activeClients] =
-			await Promise.all([
-				prisma.appointment.count({
-					where: {
-						dateTime: {
-							gte: startToday,
-							lte: endToday,
-						},
+		const [
+			todayAppointments,
+			weekAppointments,
+			activeClients,
+			todayAppointmentsList,
+		] = await Promise.all([
+			prisma.appointment.count({
+				where: {
+					dateTime: {
+						gte: startToday,
+						lte: endToday,
 					},
-				}),
-				prisma.appointment.count({
-					where: {
-						dateTime: {
-							gte: startWeek,
-							lte: endWeek,
-						},
+				},
+			}),
+			prisma.appointment.count({
+				where: {
+					dateTime: {
+						gte: startWeek,
+						lte: endWeek,
 					},
-				}),
-				prisma.appointment.findMany({
-					where: {
-						status: {
-							in: ['pendiente', 'confirmada'],
-						},
+				},
+			}),
+			prisma.appointment.findMany({
+				where: {
+					status: {
+						in: ['pendiente', 'confirmada'],
 					},
-					select: {
-						userId: true,
+				},
+				select: {
+					userId: true,
+				},
+				distinct: ['userId'],
+			}),
+			prisma.appointment.findMany({
+				where: {
+					dateTime: {
+						gte: startToday,
+						lte: endToday,
 					},
-					distinct: ['userId'],
-				}),
-			]);
+				},
+				orderBy: {
+					dateTime: 'asc', // orden inicial por fecha
+				},
+			}),
+		]);
+
+		// Reordenar las citas del día por estado y luego por fecha
+		const orderedAppointments = todayAppointmentsList.sort((a, b) => {
+			const statusOrder = (status: string) => {
+				if (status === 'pendiente') return 0;
+				if (status === 'activo') return 1;
+				if (status === 'completado') return 2;
+				return 3;
+			};
+
+			const statusDiff = statusOrder(a.status) - statusOrder(b.status);
+			if (statusDiff !== 0) return statusDiff;
+
+			return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
+		});
 
 		res.status(200).json({
 			todayAppointments,
 			weekAppointments,
 			activeClientsCount: activeClients.length,
+			todayAppointmentsList: orderedAppointments,
 		});
 	} catch (error) {
 		console.error(error);
