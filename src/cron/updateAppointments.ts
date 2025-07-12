@@ -11,50 +11,65 @@ dayjs.extend(timezone);
 
 const TIME_ZONE = 'America/Bogota';
 
-// Ejecutar cada 5 minutos
 cron.schedule('*/5 * * * *', async () => {
 	try {
 		const now = dayjs().tz(TIME_ZONE);
 
-		// 🔹 Citas que deben estar "activas" (ya están comenzando)
-		const appointmentsToActivate = await prisma.appointment.findMany({
+		// 🔹 1. PENDIENTE → CONFIRMADO (faltan 2h o menos)
+		const toConfirm = await prisma.appointment.findMany({
 			where: {
 				status: 'pendiente',
 				dateTime: {
-					lte: now.toDate(), // ya inició
-					gte: now.subtract(5, 'minutes').toDate(), // comenzó en los últimos 5 minutos
+					lte: now.add(2, 'hours').toDate(), // faltan 2h o menos
 				},
 			},
 		});
 
-		for (const appointment of appointmentsToActivate) {
+		for (const appt of toConfirm) {
 			await prisma.appointment.update({
-				where: { id: appointment.id },
-				data: { status: 'activo' },
+				where: { id: appt.id },
+				data: { status: 'confirmado' },
 			});
 		}
 
-		// 🔸 Citas que deben ser "completadas" (ya pasaron hace más de 1h)
-		const appointmentsToComplete = await prisma.appointment.findMany({
+		// 🔸 2. CONFIRMADO → EN_CURSO (es la hora actual o acaba de empezar)
+		const toStart = await prisma.appointment.findMany({
 			where: {
-				status: 'activo',
+				status: 'confirmado',
 				dateTime: {
-					lte: now.subtract(1, 'hour').toDate(), // ya pasó hace 1 hora
+					lte: now.toDate(),
+					gte: now.subtract(5, 'minutes').toDate(), // empezó en últimos 5 min
 				},
 			},
 		});
 
-		for (const appointment of appointmentsToComplete) {
+		for (const appt of toStart) {
 			await prisma.appointment.update({
-				where: { id: appointment.id },
+				where: { id: appt.id },
+				data: { status: 'en_curso' },
+			});
+		}
+
+		// 🔻 3. EN_CURSO → COMPLETADO (pasó hace más de 1h)
+		const toComplete = await prisma.appointment.findMany({
+			where: {
+				status: 'en_curso',
+				dateTime: {
+					lte: now.subtract(1, 'hour').toDate(), // pasó hace 1h o más
+				},
+			},
+		});
+
+		for (const appt of toComplete) {
+			await prisma.appointment.update({
+				where: { id: appt.id },
 				data: { status: 'completado' },
 			});
 		}
 
-		console.log(`✔️ [CRON] ${appointmentsToActivate.length} citas activadas.`);
-		console.log(
-			`✔️ [CRON] ${appointmentsToComplete.length} citas completadas.`
-		);
+		console.log(`✔️ [CRON] ${toConfirm.length} confirmadas.`);
+		console.log(`✔️ [CRON] ${toStart.length} en curso.`);
+		console.log(`✔️ [CRON] ${toComplete.length} completadas.`);
 	} catch (error) {
 		console.error('❌ [CRON] Error al actualizar citas:', error);
 	}
