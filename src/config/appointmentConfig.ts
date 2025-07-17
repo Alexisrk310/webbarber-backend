@@ -3,7 +3,7 @@ export const appointmentConfig = {
 	// Horario de trabajo
 	workingHours: {
 		start: 8, // 8 AM
-		end: 17, // 5 PM
+		end: 17.1, // 5 PM
 	},
 
 	// Si los fines de semana están habilitados (por defecto true)
