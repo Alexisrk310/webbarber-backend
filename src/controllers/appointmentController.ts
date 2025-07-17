@@ -15,7 +15,8 @@ dayjs.extend(isoWeek);
 const isHourWithinWorkingHours = (date: Date) => {
 	const zoned = dayjs(date).tz(TIME_ZONE);
 	const hour = zoned.hour();
-	return hour >= 8 && hour < 17;
+	const minute = zoned.minute();
+	return (hour >= 8 && hour < 17) || (hour === 17 && minute === 0);
 };
 
 export const getUserAppointments = async (
